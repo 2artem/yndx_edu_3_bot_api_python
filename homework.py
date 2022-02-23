@@ -67,7 +67,8 @@ def get_api_answer(current_timestamp):
         if isinstance(request.json(), dict):
             api_ya_answer = request.json().get('message')
             logger.warning(f'Ответ API Яндекс: {api_ya_answer}')
-        raise APIstatusCodeNot200(request.status_code)
+        err_msg = f'Код запроса не 200 и равен: {request.status_code}.'
+        raise APIstatusCodeNot200(err_msg)
     else:
         return request.json()
 
@@ -139,37 +140,10 @@ def main():
                             logger.error('Домашняя работа не словарь')
             else:
                 logger.error('Ответ API.Ya не корректен')
-            # Проверяем что API передал дату запроса
-            if 'current_date' in response:
-                current_timestamp = response.get('current_date')
-            else:
-                logger.error('Ошибка извлечения даты запроса из ответа API.Ya')
-                current_timestamp = False
+            # Берем дату из запроса для следующей провекри статусов ДЗ
+            current_timestamp = response.get('current_date')
             # Спим после итерации
             sleeping()
-        except telegram.error.BadRequest as error:
-            er_txt = (
-                f'{error} - Неверная переменная TELEGRAM_CHAT_ID: '
-                f'{TELEGRAM_CHAT_ID} - сообщение не отправлено'
-                f'Обязательные переменные окружения отсутствуют.'
-            )
-            logger.error(er_txt)
-            sleeping()
-        except telegram.error.Unauthorized as error:
-            er_txt = (
-                f'{error} - Неверный TELEGRAM_TOKEN - сообщение не отправлено'
-            )
-            logger.error(er_txt)
-            sleeping()
-        except APIstatusCodeNot200 as error:
-            message = f'Код запроса отличный от 200 и равен: {error}.'
-            logger.error(message)
-            if last_error_message(message):
-                send_message(bot, message)
-            sleeping()
-        except KeyboardInterrupt:
-            logger.info('Вы остановили бота вводом с клавиатуры')
-            break
         except Exception as error:
             message = f'Сбой в работе программы: {error}'
             logger.error(message)
