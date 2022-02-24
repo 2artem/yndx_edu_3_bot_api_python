@@ -44,9 +44,7 @@ def sleeping():
 
 def last_error_message(message):
     """Исключение повторной отправки одинаковых сообщений об ошибках."""
-    if message == LAST_MESSAGE:
-        return False
-    return True
+    return message != LAST_MESSAGE
 
 
 def send_message(bot, message):
@@ -62,7 +60,12 @@ def get_api_answer(current_timestamp):
     timestamp = current_timestamp or int(time.time())
     params = {'from_date': timestamp}
     # Проверяем что ENDPOINT по параметрам доступен
-    request = requests.get(ENDPOINT, headers=HEADERS, params=params)
+    try:
+        request = requests.get(ENDPOINT, headers=HEADERS, params=params)
+    except Exception as error:
+        message = f'ENDPOINT Ya. недодоступен: {error}'
+        logger.error(message)
+        raise
     if request.status_code != 200:
         if isinstance(request.json(), dict):
             api_ya_answer = request.json().get('message')
@@ -84,16 +87,18 @@ def check_response(response):
     if not isinstance(check_list_homeworks, list):
         raise TypeError('Ответ API  оключу "homeworks" не список')
     # В ответе API отсутствуют статусы Д\З
-    if check_list_homeworks != []:
+    if len(check_list_homeworks) > 0:
         return check_list_homeworks
     else:
-        logger.debug('В текущей проверке новые статусы ДЗ отсутсвуют')
+        logger.debug('В текущей проверке новые статусы Д-З отсутсвуют')
 
 
 def parse_status(homework):
     """Извлекает из информации о конкретном ДЗ его статус."""
     homework_name = homework.get('homework_name')
     homework_status = homework.get('status')
+    if homework_status not in HOMEWORK_STATUSES:
+        raise KeyError('Полученный статус Д-З не документирован')
     verdict = HOMEWORK_STATUSES[homework_status]
     return f'Изменился статус проверки работы "{homework_name}". {verdict}'
 
@@ -142,14 +147,13 @@ def main():
                 logger.error('Ответ API.Ya не корректен')
             # Берем дату из запроса для следующей провекри статусов ДЗ
             current_timestamp = response.get('current_date')
-            # Спим после итерации
-            sleeping()
         except Exception as error:
             message = f'Сбой в работе программы: {error}'
             logger.error(message)
+            # Проверяем, было ли это сообщение отправлено ранее
             if last_error_message(message):
                 send_message(bot, message)
-            sleeping()
+        sleeping()
 
 
 if __name__ == '__main__':
